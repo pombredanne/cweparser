@@ -1,197 +1,176 @@
 import xmltodict
 import json
-
+from dotted_dict import DottedDict as ddict
 undefined = "undefined"
 
-with open('cwe.xml', 'r') as fp:
-    xml = fp.read()
+def write_xmpl_to_json_file():
+    with open('cwe.xml', 'r') as fp:
+        xml = fp.read()
+        j = xmltodict.parse(xml)
+        with open('cwec.json', 'w') as fp:
+            json.dump(j, fp)
 
-jj = xmltodict.parse(xml)
+def load_json_from_file():
+    with open('cwec.json', 'r') as fp:
+        return json.load(fp)
 
-o = jj.get("Weakness_Catalog", {})
+json_database = load_json_from_file()
 
-# Views
+Weakness_Catalog = json_database.get("Weakness_Catalog", {})
 
-views = o.get("Views", {})
-view = views.get("View", [])
+Weaknesses_Section = Weakness_Catalog.get("Weaknesses", {}).get("Weakness", [])
+Categories_Section = Weakness_Catalog.get("Categories", {}).get("Category", [])
+Views_Section = Weakness_Catalog.get("Views", {}).get("View", [])
+External_References_Section = Weakness_Catalog.get("External_References", {}).get("External_Reference", [])
 
-print("view count: {}".format(len(view)))
+# ############################################################################
+#  Weaknesses
+# ############################################################################
 
-parsed_views = []
 
-for v in view:
-    template = {}
-    template["id"] = v.get("@ID", undefined)
-    template["name"] = v.get("@Name", undefined)
-    template["status"] = v.get("@Status", undefined)
-    # View_Structure
-    template["view_structure"] = v.get("View_Structure", undefined)
-    # View_Objective
-    template["view_objective"] = ""
-    text = v.get("View_Objective", {}).get("Text", [])
-    for t in text:
-        template["view_objective"] += t
-    if template["view_objective"] == "":
-        template["view_objective"] = undefined
-    # View_Audience
-    template["view_audience"] = ""
-    text = v.get("View_Audience", {}).get("Audience", [])
-    if isinstance(text, dict):
-        text = [text]
-    for t in text:
-        _1 = t.get("Stakeholder", "")
-        _2 = t.get("Stakeholder_Description", {})
-        _3 = _2.get("Text", "")
-        template["view_audience"] += _1 + "\n" + _3
-    if template["view_audience"] == "":
-        template["view_audience"] = undefined
-    # Relationships
-    template["relationships"] = []
-    rel = v.get("Relationships", {}).get("Relationship", [])
-    for r in rel:
-        tmpl = {}
-        tmpl["relationship_views_id_ordinal"] = r.get("Relationship_Views", {}).get("Relationship_View_ID", {}).get("@Ordinal", undefined)
-        tmpl["relationship_views_id_text"] = r.get("Relationship_Views", {}).get("Relationship_View_ID", {}).get("#text", undefined)
-        tmpl["relationship_target_form"] = r.get("Relationship_Target_Form", undefined)
-        tmpl["relationship_nature"] = r.get("Relationship_Nature", undefined)
-        tmpl["relationship_target_id"] = r.get("Relationship_Target_ID", undefined)
-        template["relationships"].append(tmpl)
-    # Content_History
-    template["content_history_modification"] = []
-    mod = v.get("Content_History", {}).get("Modification", [])
-    if isinstance(mod, dict):
-        mod = [mod]
-    for m in mod:
-        tmpl = {}
-        tmpl["modification_source"] = m.get("@Modification_Source", undefined)
-        tmpl["modifier"] = m.get("Modifier", undefined)
-        tmpl["modifier_organization"] = m.get("Modifier_Organization", undefined)
-        tmpl["modification_date"] = m.get("Modification_Date", undefined)
-        tmpl["modification_comment"] = m.get("Modification_Comment", undefined)
-        template["content_history_modification"].append(tmpl)
-    template["previous_entry_name_change_date"] = v.get("Previous_Entry_Names", {}).get("Previous_Entry_Name", {}).get("@Name_Change_Date", undefined)
-    template["previous_entry_name_change_text"] = v.get("Previous_Entry_Names", {}).get("Previous_Entry_Name", {}).get("#text", undefined)
+def recursive_description_dict_to_text(dictionary):
+    text = ""
+    keys = dictionary.keys()
+    for key in keys:
+        if isinstance(dictionary[key], str):
+            if "@style" not in key:
+                text += dictionary[key] + '\n'
+        elif isinstance(dictionary[key], dict):
+            text += recursive_description_dict_to_text(dictionary[key])
+        elif isinstance(dictionary[key], list):
+            for k in dictionary[key]:
+                if isinstance(k, str):
+                    if "@style" not in key:
+                        if ":li" in key:
+                            text += "- " + k + '\n'
+                        else:
+                            text += k + '\n'
+                elif isinstance(k, dict):
+                    text += recursive_description_dict_to_text(k)
+    return text
 
-    if template["id"] != undefined:
-        parsed_views.append(template)
+def Parse_Extended_Description(Extended_Description):
+    if isinstance(Extended_Description, str):
+        return Extended_Description
+    elif isinstance(Extended_Description, list):
+        text = ""
+        for ed in Extended_Description:
+            text += ed + '\n'
+    elif isinstance(Extended_Description, dict):
+        return recursive_description_dict_to_text(Extended_Description)
+    return undefined
 
+def Parse_Related_Weaknesses(Related_Weaknesses):
+    Related_Weakness = []
+    rw = Related_Weaknesses.get("Related_Weakness", [])
+    if isinstance(rw, dict):
+        rw = [rw]
+    for r in rw:
+        Related_Weakness.append(
+            dict(
+                Nature=r.get("@Nature", undefined),
+                CWE_ID=r.get("@CWE_ID", undefined),
+                ViewID=r.get("@View_ID", undefined),
+                Ordinal=r.get("@Ordinal", undefined)
+            )
+        )
+    return Related_Weakness
+
+def Parse_Alternate_Terms(Alternate_Terms):
+    Alternate_Term = []
+    at = Alternate_Terms.get("Alternate_Term", [])
+    if isinstance(Alternate_Term, list):
+        at = [at]
+    for a in at:
+        description = a.get("Description", {})
+        if isinstance(description, dict):
+            dscr = recursive_description_dict_to_text(description)
+        elif isinstance(description, str):
+            dscr = description
+        Alternate_Term.append(
+            dict(
+                Term=a.get("Term", undefined),
+                Description=dscr
+            )
+        )
+    return Alternate_Term
+
+
+def Parse_Weaknesses(Weaknesses_Section):
+    Weaknesses_list = Weaknesses_Section.get("Weakness", [])
+    for One_Weakness in Weaknesses_list:
+        Weakness = ddict()
+        Weakness.ID = One_Weakness.get("@ID", undefined)
+        Weakness.Name = One_Weakness.get("@Name", undefined)
+        Weakness.Abstraction = One_Weakness.get("@Abstraction", undefined)
+        Weakness.Structure = One_Weakness.get("@Structure", undefined)
+        Weakness.Status = One_Weakness.get("@Status", undefined)
+        Weakness.Description = One_Weakness.get("Description", undefined)
+        Weakness.Extended_Description = Parse_Extended_Description(One_Weakness.get("Extended_Description", {}))
+        Weakness.Related_Weaknesses = Parse_Related_Weaknesses(One_Weakness.get("Related_Weaknesses", {}))
+        Weakness.Alternate_Terms = Parse_Alternate_Terms(One_Weakness.get("Alternate_Terms", {}))
+    pass
+
+print("Parse Weaknesses")
+# Weaknesses = Parse_Weaknesses(Weaknesses_Section)
+
+
+
+
+# - Views
+
+# View_Structure
+# View_Objective
+# View_Audience
+# Relationships
+# Content_History
 # Categories
 
-categories = o.get("Categories", {})
-categorie = categories.get("Category", [])
+# - Categories
+# ID
+# Name
+# Status
+# Description
+# Relationship
+# Relationship_Notes
+# Theoretical_Notes
+# Research_Gaps
+# Weakness_Ordinalities
 
-parsed_categories = []
+# Applicable_Platforms
 
-for cat in categorie:
-    template = {}
-    template["id"] = cat.get("@ID", undefined)
-    template["name"] = cat.get("@Name", undefined)
-    template["status"] = cat.get("@Status", undefined)
-    template["description"] = cat.get("Description", {}).get("Description_Summary", undefined)
-    # Content_History
-    ch = cat.get("Content_History", {})
-    mod = ch.get("Modification", [])
-    # Content_History -> Modifications
-    template["content_history_modifications"] = []
-    if isinstance(mod, dict):
-        mod = [mod]
-    for m in mod:
-        tmpl = {}
-        tmpl["modification_source"] = m.get("@Modification_Source", undefined)
-        tmpl["modifier_organization"] = m.get("Modifier_Organization", undefined)
-        tmpl["modification_date"] = m.get("Modification_Date", undefined)
-        tmpl["modification_comment"] = m.get("Modification_Comment", undefined)
-        template["content_history_modifications"].append(tmpl)
-    # Taxonomy_Mappings
-    template["taxonomy_mapping"] = []
-    tm = cat.get("Taxonomy_Mappings", {}).get("Taxonomy_Mapping", [])
-    if isinstance(tm, dict):
-        tm = [tm]
-    for t in tm:
-        tmpl = {}
-        tmpl["mapped_taxonomy_name"] = t.get("@Mapped_Taxonomy_Name", undefined)
-        tmpl["mapped_node_name"] = t.get("Mapped_Node_Name", undefined)
-        tmpl["mapped_node_id"] = t.get("Mapped_Node_ID", undefined)
-        template["taxonomy_mapping"].append(tmpl)
-    # Detection_Methods
-    template["detection_methods"] = []
-    dms = cat.get("Detection_Methods", {})
-    dm = dms.get("Detection_Method", [])
-    if isinstance(dm, dict):
-        dm = [dm]
-    for d in dm:
-        tmpl = {}
-        tmpl["method_name"] = d.get("Method_Name", undefined)
-        dscr = d.get("Method_Description", {})
-        tmpl["method_description"] = ""
-        text = dscr.get("Text", [])
-        if isinstance(text, str):
-            text = [text]
-        for t in text:
-            tmpl["method_description"] += t + "\n\n"
-        block = dscr.get("Block", [])
-        if isinstance(block, dict):
-            block = [block]
-        for b in block:
-            # TODO: Check block nature
+# Detection_Methods
 
-            # TODO: view line 6316
-            
-            block_nature = b.get("@Block_Nature", "")
-            block_text = b.get("Text", [])
-            bt = ""
-            if isinstance(block_text, str):
-                block_text = [block_text]
-            for blt in block_text:
-                if block_nature == "List":
-                    tmpl["method_description"] += "- " + blt.replace('\t', '') + "\n"
-                else:
-                    tmpl["method_description"] += blt.replace('\t', "") + "\n"
+# Maintenance_Notes
 
-        tmpl["method_effectiveness"] = d.get("Method_Effectiveness", undefined)
-        template["detection_methods"].append(tmpl)
-    # Relationships
-    template["relationships"] = []
-    rel = cat.get("Relationships", {}).get("Relationship", [])
-    if isinstance(rel, dict):
-        rel = [rel]
-    for r in rel:
-        tmpl = {}
-        Relationship_Views = r.get("Relationship_Views", {})
-        Relationship_View_ID = Relationship_Views.get("Relationship_View_ID", {})
-        if isinstance(Relationship_View_ID, str):
-            tmpl["relationship_views_id_ordinal"] = Relationship_View_ID
-        elif isinstance(Relationship_View_ID, dict):
-            tmpl["relationship_views_id_ordinal"] = Relationship_View_ID.get("@Ordinal", undefined)
-            tmpl["relationship_views_id_text"] = Relationship_View_ID.get("#text", undefined)
-        else:
-            tmpl["relationship_views_id_ordinal"] = undefined
-            tmpl["relationship_views_id_text"] = undefined
-        tmpl["relationship_target_form"] = r.get("Relationship_Target_Form", undefined)
-        tmpl["relationship_nature"] = r.get("Relationship_Nature", undefined)
-        tmpl["relationship_target_id"] = r.get("Relationship_Target_ID", undefined)
-        template["relationships"].append(tmpl)
+# Time_of_Introduction
 
-    if template["id"] != undefined:
-        parsed_categories.append(template)
+# Likelihood_of_Exploit
 
-for pc in parsed_categories:
-    if pc["id"] == "16":
-        print("id:\n{}".format(pc["id"]))
-        print("name:\n{}".format(pc["name"]))
-        print("status:\n{}".format(pc["status"]))
-        print("description:\n{}".format(pc["description"]))
-        print("content_history_modifications:\n{}".format(pc["content_history_modifications"]))
-        print("taxonomy_mapping:\n{}".format(pc["taxonomy_mapping"]))
-        print("detection_methods:\n{}".format(pc["detection_methods"]))
-        print("relationships:\n{}".format(pc["relationships"]))
+# Common_Consequences
 
-# # Weaknesses
-#
-# weaknesses = o.get("Weaknesses", {})
-# weakness = weaknesses.get("Weakness", [])
-#
-# # Compound_Elements
-#
-# compaund_elements = o.get("Compaund_Elements", {})
-# compaund_element = compaund_elements.get("Compound_Element", [])
+# Potential_Mitigations
+
+# Causal_Nature
+
+# Demonstrative_Examples
+
+# Affected_Resources
+
+# Content_History
+
+# References
+
+# Taxonomy_Mappings
+
+# White_Box_Definitions
+
+# Related_Attack_Patterns
+
+# 6285
+
+
+# - Weaknesses
+
+# - Compound_Elements
+
