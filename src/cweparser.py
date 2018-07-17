@@ -222,11 +222,13 @@ def Get_Content_History(Content_History):
     pen = Content_History.get("Previous_Entry_Name", [])
     mod = [mod] if isinstance(mod, dict) else mod
     pen = [pen] if isinstance(pen, dict) else pen
-    Submission = dict(
-        Submission_Name=sub.get("Submission_Name", undefined),
-        Submission_Organization=sub.get("Submission_Organization", undefined),
-        Submission_Date=sub.get("Submission_Date", undefined)
-    )
+    Submission = [
+        dict(
+            Submission_Name=sub.get("Submission_Name", undefined),
+            Submission_Organization=sub.get("Submission_Organization", undefined),
+            Submission_Date=sub.get("Submission_Date", undefined)
+        )
+    ]
     Modification = [
         dict(
             Modification_Name=x.get("Modification_Name", undefined),
@@ -241,11 +243,7 @@ def Get_Content_History(Content_History):
             Text=x.get("#text", undefined)
         ) for x in pen
     ]
-    return dict(
-        Submission=Submission,
-        Modification=Modification,
-        Previous_Entry_Name=Previous_Entry_Name
-    )
+    return Submission, Modification, Previous_Entry_Name
 
 def Get_Relationships(Relationships):
     Has_Member = Relationships.get("Has_Member", [])
@@ -301,7 +299,9 @@ def Parse_Weakness_Section(Weaknesses_Sections):
         Weakness.Notes = Get_Notes(One_Weakness.get("Notes", {}))
         Weakness.Related_Attack_Patterns = Get_Related_Attack_Patterns(One_Weakness.get("Related_Attack_Patterns", {}))
         Weakness.Observed_Examples = Get_Observed_Examples(One_Weakness.get("Observed_Examples", {}))
-        Weakness.Content_History = {} # {Submission={}, Modification=[{}], Previous_Entry_Name=[{}]}
+        Weakness.Content_History_Submission = [] # [{}]
+        Weakness.Content_History_Modification = [] # [{}]
+        Weakness.Content_History_Previous_Entry_Name = [] # [{}]
         Weakness.Objective = undefined
         Weakness.Audience = [] # [{}]
         Weakness.Relationships = [] # [{}]
@@ -335,7 +335,10 @@ def Parse_Categories_Section(Categories_Section):
         Category.Notes = [] # [{}]
         Category.Related_Attack_Patterns = [] #[{}]
         Category.Observed_Examples = [] #[{}]
-        Category.Content_History = Get_Content_History(One_Category.get("Content_History", {})) # {Submission={}, Modification=[{}], Previous_Entry_Name=[{}]}
+        Submission, Modification, Previous_Entry_Name = Get_Content_History(One_Category.get("Content_History", {}))
+        Category.Content_History_Submission = Submission # [{}]
+        Category.Content_History_Modification = Modification # [{}]
+        Category.Content_History_Previous_Entry_Name = Previous_Entry_Name # [{}]
         Category.Objective = undefined
         Category.Audience = [] # [{}]
         Category.Relationships = Get_Relationships(One_Category.get("Relationships", {}))
@@ -368,7 +371,10 @@ def Parse_Views_Section(Views_Section):
         View.Notes = [] # [{}]
         View.Related_Attack_Patterns = [] #[{}]
         View.Observed_Examples = [] #[{}]
-        View.Content_History = Get_Content_History(One_View.get("Content_History", {})) # {Submission={}, Modification=[{}], Previous_Entry_Name=[{}]}
+        Submission, Modification, Previous_Entry_Name = Get_Content_History(One_View.get("Content_History", {}))
+        View.Content_History_Submission = Submission # [{}]
+        View.Content_History_Modification = Modification # [{}]
+        View.Content_History_Previous_Entry_Name = Previous_Entry_Name # [{}]
         View.Objective = One_View.get("Objective", undefined)
         View.Audience = Get_Audience(One_View.get("Audience", {}))
         View.Relationships = Get_Relationships(One_View.get("Members", {}))
