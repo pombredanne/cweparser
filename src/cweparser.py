@@ -109,6 +109,15 @@ def Convert_Description_Dict_To_Text(dictionary):
 
     return text
 
+def Convert_List_Of_Strings_To_One_String(String_Or_List):
+    text = ""
+    if isinstance(String_Or_List, str):
+        return String_Or_List
+    if isinstance(String_Or_List, list):
+        for s in String_Or_List:
+            text += s + '\n'
+    return text
+
 def Get_Description(Description):
     if isinstance(Description, str):
         return Description
@@ -120,6 +129,11 @@ def Get_Description(Description):
 
 def Get_Extended_Description(Extended_Description):
     return Get_Description(Extended_Description)
+
+def Scan_Related_Weakness_For_CWE(Related_Weakness):
+    return list(set([x["CWE_ID"] for x in Related_Weakness if "CWE_ID" in x]))
+
+
 
 def Get_Related_Weaknesses(Related_Weaknesses):
     Related_Weakness = Related_Weaknesses.get("Related_Weakness", [])
@@ -275,6 +289,21 @@ def Get_Audience(Audience):
         ) for x in Stakeholder
     ]
 
+def Get_Potential_Mitigations(Potential_Mitigations):
+    Mitigation = Potential_Mitigations.get("Mitigation", [])
+    Mitigation = [Mitigation] if isinstance(Mitigation, dict) else Mitigation
+    return [
+        dict(
+            Mitigation_ID=x.get("@Mitigation_ID", undefined),
+            Method=x.get("Method", undefined),
+            Phase=Convert_List_Of_Strings_To_One_String(x.get("Phase", undefined)),
+            Strategy=x.get("Strategy", undefined),
+            Effectiveness=x.get("Effectiveness", undefined),
+            Effectiveness_Notes=x.get("Effectiveness_Notes", undefined),
+            Description=Convert_Description_Dict_To_Text(x.get("Description", {}))
+        ) for x in Mitigation
+    ]
+
 # ############################################################################
 #  Weaknesses 
 # ############################################################################
@@ -307,6 +336,11 @@ def Parse_Weakness_Section(Weaknesses_Sections):
         Weakness.Relationships = [] # [{}]
         Weakness.Notes = [] # [{}]
         Weakness.References = [] #[{}]
+        # CWE -? in Notes, Description, Effectiveness_Notes
+        Weakness.Potential_Mitigations = Get_Potential_Mitigations(One_Weakness.get("Potential_Mitigations", {}))
+        CWE_List = Scan_Related_Weakness_For_CWE(Weakness.Related_Weakness)
+        CAPEC_List = []
+        CVW_List = []
         Weaknesses.append(Weakness)
     return Weaknesses
 
@@ -344,6 +378,10 @@ def Parse_Categories_Section(Categories_Section):
         Category.Relationships = Get_Relationships(One_Category.get("Relationships", {}))
         Category.Notes = [] # [{}]
         Category.References = Get_References(One_Category.get("References", {}))
+        Category.Potential_Mitigations = [] # [{}]
+        CWE_List = []
+        CAPEC_List = []
+        CVW_List = []
         Categories.append(Category)
     return Categories
 
@@ -378,8 +416,13 @@ def Parse_Views_Section(Views_Section):
         View.Objective = One_View.get("Objective", undefined)
         View.Audience = Get_Audience(One_View.get("Audience", {}))
         View.Relationships = Get_Relationships(One_View.get("Members", {}))
+        # CWE - ? here in @text
         View.Notes = Get_Notes(One_View.get("Notes", {}))  
         View.References = [] #[{}]      
+        View.Potential_Mitigations = [] # [{}]
+        CWE_List = []
+        CAPEC_List = []
+        CVW_List = []
         Views.append(View)
     return Views
 
@@ -405,12 +448,41 @@ def Parse_External_References(External_References_Section):
     return External_References
 
 
-W = Parse_Weakness_Section(Weaknesses_Section)
-print("Get {} Weaknesses".format(len(W)))
-C = Parse_Categories_Section(Categories_Section)
-print("Get {} Categories".format(len(C)))
-V = Parse_Views_Section(Views_Section)
-print("Get {} Views".format(len(V)))
-print("complete")
+# E = Parse_External_References(External_References_Section)
+
+# W = Parse_Weakness_Section(Weaknesses_Section)
+# print("Get {} Weaknesses".format(len(W)))
+# C = Parse_Categories_Section(Categories_Section)
+# print("Get {} Categories".format(len(C)))
+# V = Parse_Views_Section(Views_Section)
+# print("Get {} Views".format(len(V)))
+# R = W + C + V
+# print("complete with {} result elements".format(len(R)))
 
 # TODO: Append related CWEs
+
+Potential_Mitigations = [
+    {
+        "@Mitigation_ID": "MIT-7",
+        "Phase": "Architecture and Design",
+        "Strategy": "Input Validation",
+        "Description": "Use an input validation framework such as Struts or the OWASP ESAPI Validation API. If you use Struts, be mindful of weaknesses covered by the CWE-101 category."
+    },
+    {
+        "@Mitigation_ID": "MIT-7",
+        "Phase": "Architecture and Design",
+        "Strategy": "Libraries or Frameworks",
+        "Description": "Use an input validation framework such as CWE-12 Struts or the OWASP ESAPI Validation API. If you use Struts, be mindful of weaknesses covered by the CWE-101 category."
+    },
+]
+
+
+def CWE_Match(String):
+    return re.findall(r"CWE-[0-9]{1,4}", String)
+
+def Scan_Potential_Mitigations_Description(Potential_Mitigations):
+    return [CWE_Match(x["Description"]) for x in Potential_Mitigations if "Description" in x]
+    #list(set([CWE_Match(x["Description"]) for x in Potential_Mitigations if "Description" in x)])
+
+print(Scan_Potential_Mitigations_Description(Potential_Mitigations))
+# list(set([x["CWE_ID"] for x in Related_Weakness if "CWE_ID" in x]))
