@@ -1,30 +1,28 @@
 # -*- coding: utf-8 -*-
-
+import os
+import sys
 import re
 import xmltodict
 import json
 from dotted_dict import DottedDict as ddict
 
-import sys
-reload(sys)
-sys.setdefaultencoding('utf8')
-
 from example import database
 
 undefined = "undefined"
 
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 DEBUG = False
 
 def write_xmpl_to_json_file():
-    with open('./src/cwe.xml', 'r') as fp:
+    with open('cwe.xml', 'r') as fp:
         xml = fp.read()
         j = xmltodict.parse(xml)
-        with open('./src/cwec.json', 'w') as fp:
+        with open('cwec.json', 'w') as fp:
             json.dump(j, fp)
 
 def load_json_from_file():
-    with open('./src/cwec.json', 'r') as fp:
+    with open('cwec.json', 'r') as fp:
         return json.load(fp)
 
 
@@ -40,73 +38,90 @@ Categories_Section = Weakness_Catalog.get("Categories", {}).get("Category", [])
 Views_Section = Weakness_Catalog.get("Views", {}).get("View", [])
 External_References_Section = Weakness_Catalog.get("External_References", {}).get("External_Reference", [])
 
+def Flatter_Unique_Array(array):
+    if isinstance(array, list):
+        res = []
+        for a in array:
+            if isinstance(a, str):
+                res += [a]
+            elif isinstance(a, list):
+                res += a
+        return list(set(res))
+    if isinstance(array, str):
+        return [array]
+    return []
+
+def CT(text):
+    return text.replace('’', "'")
+
 def Convert_Description_Dict_To_Text(dictionary):
     text = ""
-    keys = dictionary.keys()
-    if "xhtml:p" in keys:
-        xhtml_p = dictionary["xhtml:p"]
-        if isinstance(xhtml_p, str):
-            text += xhtml_p
-        if isinstance(xhtml_p, list):
-            text += "\n".join(xhtml_p)
-    if "xhtml:div" in keys:
-        xhtml_div = dictionary["xhtml:div"]
-        if isinstance(xhtml_div, dict):
-            if "xhtml:div" in xhtml_div.keys():
-                xhtml_div_2 = xhtml_div["xhtml:div"]
-                if isinstance(xhtml_div_2, str):
-                    xhtml_div_2 = [xhtml_div_2]
-                text += "\n".join(xhtml_div_2)
+    if isinstance(dictionary, dict):
+        keys = dictionary.keys()
+        if "xhtml:p" in keys:
+            xhtml_p = dictionary["xhtml:p"]
+            if isinstance(xhtml_p, str):
+                text += xhtml_p
+            if isinstance(xhtml_p, list):
+                text += "\n".join(xhtml_p)
+        if "xhtml:div" in keys:
+            xhtml_div = dictionary["xhtml:div"]
+            if isinstance(xhtml_div, dict):
+                if "xhtml:div" in xhtml_div.keys():
+                    xhtml_div_2 = xhtml_div["xhtml:div"]
+                    if isinstance(xhtml_div_2, str):
+                        xhtml_div_2 = [xhtml_div_2]
+                    text += "\n".join(xhtml_div_2)
 
-            if "xhtml:ul" in xhtml_div.keys():
-                xhtml_ul = xhtml_div["xhtml:ul"]
-                if "xhtml:li" in xhtml_ul:
-                    xhtml_li = xhtml_ul["xhtml:li"]
-                    if isinstance(xhtml_li, str):
-                        xhtml_li = [xhtml_li]
-                    text += '\n'
-                    for xhtml_li_element in xhtml_li:
-                        if isinstance(xhtml_li_element, str):
-                            text += '- ' + xhtml_li_element + '\n'
-                        elif isinstance(xhtml_li_element, dict):
-                            if "xhtml:b" in xhtml_li_element:
-                                xhtml_b = xhtml_li_element.get("xhtml:b", "")
-                                text += xhtml_b + '\n'
-                            if "#text" in xhtml_li_element:
-                                text += xhtml_li_element.get("#text", "")
-
-            if "xhtml:ol" in xhtml_div.keys():
-                num = 1
-                xhtml_ol = xhtml_div["xhtml:ol"]
-                if "xhtml:li" in xhtml_ol:
-                    xhtml_li = xhtml_ol["xhtml:li"]
-                    if isinstance(xhtml_li, str):
-                        xhtml_li = [xhtml_li]
-                    text += '\n'
-                    for x in xhtml_li:
-                        text += str(num) + '. ' + x + '\n'
-                        num += 1
-    
-    if "xhtml:ul" in keys:
-        text += '\n'
-        xhtml_ul = dictionary["xhtml:ul"]
-        for xhtml_ul_element in xhtml_ul:
-            if isinstance(xhtml_ul_element, dict):
-                if "xhtml:li" in xhtml_ul_element:
-                    xhtml_li = xhtml_ul_element["xhtml:li"]
-                    if isinstance(xhtml_li, list):
+                if "xhtml:ul" in xhtml_div.keys():
+                    xhtml_ul = xhtml_div["xhtml:ul"]
+                    if "xhtml:li" in xhtml_ul:
+                        xhtml_li = xhtml_ul["xhtml:li"]
+                        if isinstance(xhtml_li, str):
+                            xhtml_li = [xhtml_li]
+                        text += '\n'
                         for xhtml_li_element in xhtml_li:
                             if isinstance(xhtml_li_element, str):
-                                text += xhtml_li_element + '\n'
+                                text += '- ' + xhtml_li_element + '\n'
                             elif isinstance(xhtml_li_element, dict):
                                 if "xhtml:b" in xhtml_li_element:
-                                    text += xhtml_li_element["xhtml:b"] + '\n'
+                                    xhtml_b = xhtml_li_element.get("xhtml:b", "")
+                                    text += xhtml_b + '\n'
                                 if "#text" in xhtml_li_element:
-                                    s = xhtml_li_element["#text"]
-                                    s = re.sub(r'\s+', ' ', s)
-                                    text += s + '\n'
-                
+                                    text += xhtml_li_element.get("#text", "")
 
+                if "xhtml:ol" in xhtml_div.keys():
+                    num = 1
+                    xhtml_ol = xhtml_div["xhtml:ol"]
+                    if "xhtml:li" in xhtml_ol:
+                        xhtml_li = xhtml_ol["xhtml:li"]
+                        if isinstance(xhtml_li, str):
+                            xhtml_li = [xhtml_li]
+                        text += '\n'
+                        for x in xhtml_li:
+                            text += str(num) + '. ' + x + '\n'
+                            num += 1
+        
+        if "xhtml:ul" in keys:
+            text += '\n'
+            xhtml_ul = dictionary["xhtml:ul"]
+            for xhtml_ul_element in xhtml_ul:
+                if isinstance(xhtml_ul_element, dict):
+                    if "xhtml:li" in xhtml_ul_element:
+                        xhtml_li = xhtml_ul_element["xhtml:li"]
+                        if isinstance(xhtml_li, list):
+                            for xhtml_li_element in xhtml_li:
+                                if isinstance(xhtml_li_element, str):
+                                    text += xhtml_li_element + '\n'
+                                elif isinstance(xhtml_li_element, dict):
+                                    if "xhtml:b" in xhtml_li_element:
+                                        text += xhtml_li_element["xhtml:b"] + '\n'
+                                    if "#text" in xhtml_li_element:
+                                        s = xhtml_li_element["#text"]
+                                        s = re.sub(r'\s+', ' ', s)
+                                        text += s + '\n'
+    elif isinstance(dictionary, str):
+        text = dictionary
     return text
 
 def Convert_List_Of_Strings_To_One_String(String_Or_List):
@@ -117,6 +132,93 @@ def Convert_List_Of_Strings_To_One_String(String_Or_List):
         for s in String_Or_List:
             text += s + '\n'
     return text
+
+def CWE_Match(String):
+    if isinstance(String, str):
+        return re.findall(r"CWE-[0-9]{1,4}", String)
+    return []
+
+def Scan_Related_Weakness_For_CWE(Related_Weakness):
+    if Related_Weakness is None:
+        return []
+    if isinstance(Related_Weakness, list):
+        base = []
+        for rw in Related_Weakness:
+            if "CWE_ID" in rw:
+                base.append(rw["CWE_ID"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Potential_Mitigations_Description_For_CWE(Potential_Mitigations):
+    if Potential_Mitigations is None:
+        return []
+    if isinstance(Potential_Mitigations, list):
+        base = []
+        for pm in Potential_Mitigations:
+            base += CWE_Match(pm["Description"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Potential_Mitigations_Effectiveness_Notes_For_CWE(Potential_Mitigations):
+    if Potential_Mitigations is None:
+        return []
+    if isinstance(Potential_Mitigations, list):
+        base = []
+        for pm in Potential_Mitigations:
+            base += CWE_Match(pm["Effectiveness_Notes"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Alternate_Terms_For_CWE(Alternate_Terms):
+    if Alternate_Terms is None:
+        return []
+    if isinstance(Alternate_Terms, list):
+        base = []
+        for at in Alternate_Terms:
+            base += CWE_Match(at["Description"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Notes_For_CWE(Notes):
+    if Notes is None:
+        return []
+    if isinstance(Notes, list):
+        base = []
+        for n in Notes:
+            base += CWE_Match(n["Text"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Observed_Examples_For_CWE(Observed_Examples):
+    if Observed_Examples is None:
+        return []
+    if isinstance(Observed_Examples, list):
+        base = []
+        for oe in Observed_Examples:
+            base += CWE_Match(oe["Description"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Demonstrative_Examples_Body_For_CWE(Demonstrative_Example_Body):
+    if Demonstrative_Example_Body is None:
+        return []
+    if isinstance(Demonstrative_Example_Body, list):
+        base = []
+        for de in Demonstrative_Example_Body:
+            base += CWE_Match(de["Body_Text"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Related_Attack_Patterns_For_CAPEC(Related_Attack_Patterns):
+    if Related_Attack_Patterns is None:
+        return []
+    if isinstance(Related_Attack_Patterns, list):
+        base = []
+        for ra in Related_Attack_Patterns:
+            base += CWE_Match(ra["CAPEC_ID"])
+    return Flatter_Unique_Array(base)
+
+def Scan_Observed_Examples_For_CVE(Observed_Examples):
+    if Observed_Examples is None:
+        return []
+    if isinstance(Observed_Examples, list):
+        base = []
+        for oe in Observed_Examples:
+            base.append(oe["Reference"])
+    return Flatter_Unique_Array(base)
 
 def Get_Description(Description):
     if isinstance(Description, str):
@@ -130,11 +232,6 @@ def Get_Description(Description):
 def Get_Extended_Description(Extended_Description):
     return Get_Description(Extended_Description)
 
-def Scan_Related_Weakness_For_CWE(Related_Weakness):
-    return list(set([x["CWE_ID"] for x in Related_Weakness if "CWE_ID" in x]))
-
-
-
 def Get_Related_Weaknesses(Related_Weaknesses):
     Related_Weakness = Related_Weaknesses.get("Related_Weakness", [])
     Related_Weakness = [Related_Weakness] if isinstance(Related_Weakness, dict) else Related_Weakness
@@ -145,7 +242,17 @@ def Get_Related_Weaknesses(Related_Weaknesses):
             View_ID=x.get("@View_ID", undefined),
             Ordinal=x.get("@Ordinal", undefined)
         ) for x in Related_Weakness
-    ]        
+    ]
+
+def Get_Alternate_Terms(Alternate_Terms):
+    Alternate_Term = Alternate_Terms.get("Alternate_Term", [])
+    Alternate_Term = [Alternate_Term] if isinstance(Alternate_Term, dict) else Alternate_Term
+    return [
+        dict(
+            Term=x.get("Term", undefined),
+            Description=x.get("Description", undefined)
+        ) for x in Alternate_Term
+    ]
 
 def Get_Weakness_Ordinalities(Weakness_Ordinalities):
     Weakness_Ordinality = Weakness_Ordinalities.get("Weakness_Ordinality", [])
@@ -219,6 +326,17 @@ def Get_Related_Attack_Patterns(Related_Attack_Patterns):
         ) for x in Related_Attack_Pattern
     ]
 
+def Get_Demonstrative_Examples_Body(Demonstrative_Examples_Body):
+    Demonstrative_Example_Body = Demonstrative_Examples_Body.get("Demonstrative_Example", [])
+    Demonstrative_Example_Body = [Demonstrative_Example_Body] if isinstance(Demonstrative_Example_Body, dict) else Demonstrative_Example_Body
+    return [
+        dict(
+            Demonstrative_Example_ID=x.get("@Demonstrative_Example_ID", undefined),
+            Intro_Text=x.get("Intro_Text", undefined),
+            Body_Text=x.get("Body_Text", undefined)
+        ) for x in Demonstrative_Example_Body
+    ]
+
 def Get_Observed_Examples(Observed_Examples):
     Observed_Example = Observed_Examples.get("Observed_Example", [])
     Observed_Example = [Observed_Example] if isinstance(Observed_Example, dict) else Observed_Example
@@ -285,7 +403,7 @@ def Get_Audience(Audience):
     return [
         dict(
             Type=x.get("Type", undefined),
-            Description=x.get("Description", undefined).decode('unicode_escape').encode('ascii','ignore')
+            Description=x.get("Description", undefined) #.decode('unicode_escape').encode('ascii','ignore')
         ) for x in Stakeholder
     ]
 
@@ -311,36 +429,52 @@ def Get_Potential_Mitigations(Potential_Mitigations):
 def Parse_Weakness_Section(Weaknesses_Sections):
     Weaknesses = list()
     for One_Weakness in Weaknesses_Section:
-        Weakness = ddict()
-        Weakness.ID = One_Weakness.get("@ID", undefined)
-        Weakness.Class = "Weakness"
-        Weakness.Type = undefined
-        Weakness.Name = One_Weakness.get("@Name", undefined)
-        Weakness.Abstraction = One_Weakness.get("@Abstraction", undefined)
-        Weakness.Structure = One_Weakness.get("@Structure", undefined)
-        Weakness.Status = One_Weakness.get("@Status", undefined)
-        Weakness.Description = Get_Description(One_Weakness.get("Description", ""))
-        Weakness.Extended_Description = Get_Extended_Description(One_Weakness.get("Extended_Description", ""))
-        Weakness.Related_Weaknesses = Get_Related_Weaknesses(One_Weakness.get("Related_Weaknesses", {}))
-        Weakness.Weakness_Ordinalities = Get_Weakness_Ordinalities(One_Weakness.get("Weakness_Ordinalities", {}))
-        Weakness.Applicable_Platforms = Get_Applicable_Platforms(One_Weakness.get("Applicable_Platforms", {}))
-        Weakness.Background_Details = Get_Background_Details(One_Weakness.get("Background_Details", {}))
-        Weakness.Notes = Get_Notes(One_Weakness.get("Notes", {}))
-        Weakness.Related_Attack_Patterns = Get_Related_Attack_Patterns(One_Weakness.get("Related_Attack_Patterns", {}))
-        Weakness.Observed_Examples = Get_Observed_Examples(One_Weakness.get("Observed_Examples", {}))
-        Weakness.Content_History_Submission = [] # [{}]
-        Weakness.Content_History_Modification = [] # [{}]
-        Weakness.Content_History_Previous_Entry_Name = [] # [{}]
-        Weakness.Objective = undefined
-        Weakness.Audience = [] # [{}]
-        Weakness.Relationships = [] # [{}]
-        Weakness.Notes = [] # [{}]
-        Weakness.References = [] #[{}]
-        # CWE -? in Notes, Description, Effectiveness_Notes
-        Weakness.Potential_Mitigations = Get_Potential_Mitigations(One_Weakness.get("Potential_Mitigations", {}))
-        CWE_List = Scan_Related_Weakness_For_CWE(Weakness.Related_Weakness)
-        CAPEC_List = []
-        CVW_List = []
+        Weakness = dict()
+        Weakness["ID"] = One_Weakness.get("@ID", undefined)
+        Weakness["Class"] = "Weakness"
+        Weakness["Type"] = undefined
+        Weakness["Name"] = One_Weakness.get("@Name", undefined)
+        Weakness["Abstraction"] = One_Weakness.get("@Abstraction", undefined)
+        Weakness["Structure"] = One_Weakness.get("@Structure", undefined)
+        Weakness["Status"] = One_Weakness.get("@Status", undefined)
+        Weakness["Description"] = Get_Description(One_Weakness.get("Description", ""))
+        Weakness["Extended_Description"] = Get_Extended_Description(One_Weakness.get("Extended_Description", ""))
+        Weakness["Related_Weaknesses"] = Get_Related_Weaknesses(One_Weakness.get("Related_Weaknesses", {}))
+        Weakness["Weakness_Ordinalities"] = Get_Weakness_Ordinalities(One_Weakness.get("Weakness_Ordinalities", {}))
+        Weakness["Applicable_Platforms"] = Get_Applicable_Platforms(One_Weakness.get("Applicable_Platforms", {}))
+        Weakness["Background_Details"] = Get_Background_Details(One_Weakness.get("Background_Details", {}))
+        Weakness["Notes"] = Get_Notes(One_Weakness.get("Notes", {}))
+        Weakness["Related_Attack_Patterns"] = Get_Related_Attack_Patterns(One_Weakness.get("Related_Attack_Patterns", {}))
+        Weakness["Demonstrative_Examples_Body"] = Get_Demonstrative_Examples_Body(One_Weakness.get("Demonstrative_Examples", {}))
+        Weakness["Observed_Examples"] = Get_Observed_Examples(One_Weakness.get("Observed_Examples", {}))
+        Weakness["Alternate_Terms"] = Get_Alternate_Terms(One_Weakness.get("Alternate_Terms", {}))
+        Weakness["Content_History_Submission"] = [] # [{}]
+        Weakness["Content_History_Modification"] = [] # [{}]
+        Weakness["Content_History_Previous_Entry_Name"] = [] # [{}]
+        Weakness["Objective"] = undefined
+        Weakness["Audience"] = [] # [{}]
+        Weakness["Relationships"] = [] # [{}]
+        Weakness["References"] = [] #[{}]
+        Weakness["Potential_Mitigations"] = Get_Potential_Mitigations(One_Weakness.get("Potential_Mitigations", {}))
+        CWE_List_From_Alternate_Terms = Scan_Alternate_Terms_For_CWE(Weakness["Alternate_Terms"])
+        CWE_List_From_Demonstrative_Examples_Body = Scan_Demonstrative_Examples_Body_For_CWE(Weakness["Demonstrative_Examples_Body"])
+        CWE_List_From_Observed_Examples = Scan_Observed_Examples_For_CWE(Weakness["Observed_Examples"])
+        CWE_List_From_Related_Weakness = Scan_Related_Weakness_For_CWE(Weakness["Related_Weaknesses"])
+        CWE_List_From_Potential_Mitigations_Description = Scan_Potential_Mitigations_Description_For_CWE(Weakness["Potential_Mitigations"])
+        CWE_List_From_Potential_Mitigations_Effectiveness_Notes = Scan_Potential_Mitigations_Effectiveness_Notes_For_CWE(Weakness["Potential_Mitigations"])
+        Weakness["CWE_List"] = list()
+        Weakness["CWE_List"] = Flatter_Unique_Array(
+            CWE_List_From_Alternate_Terms + \
+            CWE_List_From_Demonstrative_Examples_Body + \
+            CWE_List_From_Observed_Examples + \
+            CWE_List_From_Related_Weakness + \
+            CWE_List_From_Potential_Mitigations_Description + \
+            CWE_List_From_Potential_Mitigations_Effectiveness_Notes
+            )
+        Weakness["CAPEC_List"] = list()
+        Weakness["CAPEC_List"] = Scan_Related_Attack_Patterns_For_CAPEC(Weakness["Related_Attack_Patterns"])
+        Weakness["CVE_List"] = list()
+        Weakness["CVE_List"] = Scan_Observed_Examples_For_CVE(Weakness["Observed_Examples"])
         Weaknesses.append(Weakness)
     return Weaknesses
 
@@ -352,36 +486,38 @@ def Parse_Weakness_Section(Weaknesses_Sections):
 def Parse_Categories_Section(Categories_Section):
     Categories = list()
     for One_Category in Categories_Section:
-        Category = ddict()
-        Category.ID = One_Category.get("@ID", undefined)
-        Category.Class = "Category"
-        Category.Type = undefined
-        Category.Name = One_Category.get("@Name", undefined)
-        Category.Abstraction = undefined
-        Category.Structure = undefined
-        Category.Status = One_Category.get("@Status", undefined)
-        Category.Description = Get_Description(One_Category.get("Summary", ""))
-        Category.Extended_Description = undefined
-        Category.Related_Weaknesses = [] # [{}]
-        Category.Weakness_Ordinalities = [] # [{}]
-        Category.Applicable_Platforms = {} # {[{}], {}, [{}]}
-        Category.Background_Details = undefined
-        Category.Notes = [] # [{}]
-        Category.Related_Attack_Patterns = [] #[{}]
-        Category.Observed_Examples = [] #[{}]
+        Category = dict()
+        Category["ID"] = One_Category.get("@ID", undefined)
+        Category["Class"] = "Category"
+        Category["Type"] = undefined
+        Category["Name"] = One_Category.get("@Name", undefined)
+        Category["Abstraction"] = undefined
+        Category["Structure"] = undefined
+        Category["Status"] = One_Category.get("@Status", undefined)
+        Category["Description"] = Get_Description(One_Category.get("Summary", ""))
+        Category["Extended_Description"] = undefined
+        Category["Related_Weaknesses"] = [] # [{}]
+        Category["Weakness_Ordinalities"] = [] # [{}]
+        Category["Applicable_Platforms"] = {} # {[{}], {}, [{}]}
+        Category["Background_Details"] = undefined
+        Category["Notes"] = [] # [{}]
+        Category["Related_Attack_Patterns"] = [] #[{}]
+        Category["Demonstrative_Examples_Body"] = [] # [{}]
+        Category["Observed_Examples"] = [] #[{}]
+        Category["Alternate_Terms"] = [] # [{}]
         Submission, Modification, Previous_Entry_Name = Get_Content_History(One_Category.get("Content_History", {}))
-        Category.Content_History_Submission = Submission # [{}]
-        Category.Content_History_Modification = Modification # [{}]
-        Category.Content_History_Previous_Entry_Name = Previous_Entry_Name # [{}]
-        Category.Objective = undefined
-        Category.Audience = [] # [{}]
-        Category.Relationships = Get_Relationships(One_Category.get("Relationships", {}))
-        Category.Notes = [] # [{}]
-        Category.References = Get_References(One_Category.get("References", {}))
-        Category.Potential_Mitigations = [] # [{}]
-        CWE_List = []
-        CAPEC_List = []
-        CVW_List = []
+        Category["Content_History_Submission"] = Submission # [{}]
+        Category["Content_History_Modification"] = Modification # [{}]
+        Category["Content_History_Previous_Entry_Name"] = Previous_Entry_Name # [{}]
+        Category["Objective"] = undefined
+        Category["Audience"] = [] # [{}]
+        Category["Relationships"] = Get_Relationships(One_Category.get("Relationships", {}))
+        Category["Notes"] = [] # [{}]
+        Category["References"] = Get_References(One_Category.get("References", {}))
+        Category["Potential_Mitigations"] = [] # [{}]
+        Category["CWE_List"] = []
+        Category["CAPEC_List"] = []
+        Category["CVE_List"] = []
         Categories.append(Category)
     return Categories
 
@@ -392,37 +528,38 @@ def Parse_Categories_Section(Categories_Section):
 def Parse_Views_Section(Views_Section):
     Views = list()
     for One_View in Views_Section:
-        View = ddict()
-        View.ID = One_View.get("@ID", undefined)
-        View.Class = "View"
-        View.Type = One_View.get("@Type", undefined)
-        View.Name = One_View.get("@Name", undefined)
-        View.Abstraction = undefined
-        View.Structure = undefined
-        View.Status = One_View.get("@Status", undefined)
-        View.Description = undefined
-        View.Extended_Description = undefined
-        View.Related_Weaknesses = [] # [{}]
-        View.Weakness_Ordinalities = [] # [{}]
-        View.Applicable_Platforms = {} # {[{}], {}, [{}]}
-        View.Background_Details = undefined
-        View.Notes = [] # [{}]
-        View.Related_Attack_Patterns = [] #[{}]
-        View.Observed_Examples = [] #[{}]
+        View = dict()
+        View["ID"] = One_View.get("@ID", undefined)
+        View["Class"] = "View"
+        View["Type"] = One_View.get("@Type", undefined)
+        View["Name"] = One_View.get("@Name", undefined)
+        View["Abstraction"] = undefined
+        View["Structure"] = undefined
+        View["Status"] = One_View.get("@Status", undefined)
+        View["Description"] = undefined
+        View["Extended_Description"] = undefined
+        View["Related_Weaknesses"] = [] # [{}]
+        View["Weakness_Ordinalities"] = [] # [{}]
+        View["Applicable_Platforms"] = {} # {[{}], {}, [{}]}
+        View["Background_Details"] = undefined
+        View["Notes"] = [] # [{}]
+        View["Related_Attack_Patterns"] = [] #[{}]
+        View["Demonstrative_Examples_Body"] = [] # [{}]
+        View["Observed_Examples"] = [] #[{}]
+        View["Alternate_Terms"] = [] # [{}]
         Submission, Modification, Previous_Entry_Name = Get_Content_History(One_View.get("Content_History", {}))
-        View.Content_History_Submission = Submission # [{}]
-        View.Content_History_Modification = Modification # [{}]
-        View.Content_History_Previous_Entry_Name = Previous_Entry_Name # [{}]
-        View.Objective = One_View.get("Objective", undefined)
-        View.Audience = Get_Audience(One_View.get("Audience", {}))
-        View.Relationships = Get_Relationships(One_View.get("Members", {}))
-        # CWE - ? here in @text
-        View.Notes = Get_Notes(One_View.get("Notes", {}))  
-        View.References = [] #[{}]      
-        View.Potential_Mitigations = [] # [{}]
-        CWE_List = []
-        CAPEC_List = []
-        CVW_List = []
+        View["Content_History_Submission"] = Submission # [{}]
+        View["Content_History_Modification"] = Modification # [{}]
+        View["Content_History_Previous_Entry_Name"] = Previous_Entry_Name # [{}]
+        View["Objective"] = One_View.get("Objective", undefined)
+        View["Audience"] = Get_Audience(One_View.get("Audience", {}))
+        View["Relationships"] = Get_Relationships(One_View.get("Members", {}))
+        View["Notes"] = Get_Notes(One_View.get("Notes", {}))  
+        View["References"] = [] #[{}]      
+        View["Potential_Mitigations"] = [] # [{}]
+        View["CWE_List"] = Scan_Notes_For_CWE(View["Notes"])
+        View["CAPEC_List"] = []
+        View["CVE_List"] = []
         Views.append(View)
     return Views
 
@@ -448,41 +585,20 @@ def Parse_External_References(External_References_Section):
     return External_References
 
 
-# E = Parse_External_References(External_References_Section)
-
-# W = Parse_Weakness_Section(Weaknesses_Section)
-# print("Get {} Weaknesses".format(len(W)))
-# C = Parse_Categories_Section(Categories_Section)
-# print("Get {} Categories".format(len(C)))
-# V = Parse_Views_Section(Views_Section)
-# print("Get {} Views".format(len(V)))
-# R = W + C + V
-# print("complete with {} result elements".format(len(R)))
-
-# TODO: Append related CWEs
-
-Potential_Mitigations = [
-    {
-        "@Mitigation_ID": "MIT-7",
-        "Phase": "Architecture and Design",
-        "Strategy": "Input Validation",
-        "Description": "Use an input validation framework such as Struts or the OWASP ESAPI Validation API. If you use Struts, be mindful of weaknesses covered by the CWE-101 category."
-    },
-    {
-        "@Mitigation_ID": "MIT-7",
-        "Phase": "Architecture and Design",
-        "Strategy": "Libraries or Frameworks",
-        "Description": "Use an input validation framework such as CWE-12 Struts or the OWASP ESAPI Validation API. If you use Struts, be mindful of weaknesses covered by the CWE-101 category."
-    },
-]
+def run():
+    W = Parse_Weakness_Section(Weaknesses_Section)
+    print("[+] Get {} Weaknesses".format(len(W)))
+    C = Parse_Categories_Section(Categories_Section)
+    print("[+] Get {} Categories".format(len(C)))
+    V = Parse_Views_Section(Views_Section)
+    print("[+] Get {} Views".format(len(V)))
+    R = W + C + V
+    print("[+] Complete with {} result elements".format(len(R)))
 
 
-def CWE_Match(String):
-    return re.findall(r"CWE-[0-9]{1,4}", String)
+def main():
+    run()
 
-def Scan_Potential_Mitigations_Description(Potential_Mitigations):
-    return [CWE_Match(x["Description"]) for x in Potential_Mitigations if "Description" in x]
-    #list(set([CWE_Match(x["Description"]) for x in Potential_Mitigations if "Description" in x)])
 
-print(Scan_Potential_Mitigations_Description(Potential_Mitigations))
-# list(set([x["CWE_ID"] for x in Related_Weakness if "CWE_ID" in x]))
+if __name__ == "__main__":
+    main()
