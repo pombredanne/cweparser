@@ -4,9 +4,21 @@ import sys
 import re
 import xmltodict
 import json
-from dotted_dict import DottedDict as ddict
-
+import peewee
 from example import database
+
+import peewee
+from datetime import datetime
+from playhouse.postgres_ext import ArrayField
+from playhouse.postgres_ext import JSONField
+
+database = peewee.PostgresqlDatabase(
+    database="updater_db",
+    user="admin",
+    password="123",
+    host="localhost",
+    port="5432"
+)
 
 undefined = "undefined"
 
@@ -37,6 +49,25 @@ Weaknesses_Section = Weakness_Catalog.get("Weaknesses", {}).get("Weakness", [])
 Categories_Section = Weakness_Catalog.get("Categories", {}).get("Category", [])
 Views_Section = Weakness_Catalog.get("Views", {}).get("View", [])
 External_References_Section = Weakness_Catalog.get("External_References", {}).get("External_Reference", [])
+
+def Only_Digits(s):
+    return re.sub("\D\?", "", s)
+
+def Make_CWE_Number(CWE_String):
+    return "CWE-" + Only_Digits(CWE_String)
+
+def Make_CWE_Array(CWE_Array_To_Clear):
+    if isinstance(CWE_Array_To_Clear, list):
+        return list(map(Make_CWE_Number, CWE_Array_To_Clear))
+    return []
+
+def Make_CAPEC_Number(CAPEC_String):
+    return "CAPEC-" + Only_Digits(CAPEC_String)
+
+def Make_CAPEC_Array(CAPEC_Array_To_Clear):
+    if isinstance(CAPEC_Array_To_Clear, list):
+        return list(map(Make_CAPEC_Number, CAPEC_Array_To_Clear))
+    return []
 
 def Flatter_Unique_Array(array):
     if isinstance(array, list):
@@ -146,7 +177,7 @@ def Scan_Related_Weakness_For_CWE(Related_Weakness):
         for rw in Related_Weakness:
             if "CWE_ID" in rw:
                 base.append(rw["CWE_ID"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Potential_Mitigations_Description_For_CWE(Potential_Mitigations):
     if Potential_Mitigations is None:
@@ -155,7 +186,7 @@ def Scan_Potential_Mitigations_Description_For_CWE(Potential_Mitigations):
         base = []
         for pm in Potential_Mitigations:
             base += CWE_Match(pm["Description"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Potential_Mitigations_Effectiveness_Notes_For_CWE(Potential_Mitigations):
     if Potential_Mitigations is None:
@@ -164,7 +195,7 @@ def Scan_Potential_Mitigations_Effectiveness_Notes_For_CWE(Potential_Mitigations
         base = []
         for pm in Potential_Mitigations:
             base += CWE_Match(pm["Effectiveness_Notes"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Alternate_Terms_For_CWE(Alternate_Terms):
     if Alternate_Terms is None:
@@ -173,7 +204,7 @@ def Scan_Alternate_Terms_For_CWE(Alternate_Terms):
         base = []
         for at in Alternate_Terms:
             base += CWE_Match(at["Description"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Notes_For_CWE(Notes):
     if Notes is None:
@@ -182,7 +213,7 @@ def Scan_Notes_For_CWE(Notes):
         base = []
         for n in Notes:
             base += CWE_Match(n["Text"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Observed_Examples_For_CWE(Observed_Examples):
     if Observed_Examples is None:
@@ -191,7 +222,7 @@ def Scan_Observed_Examples_For_CWE(Observed_Examples):
         base = []
         for oe in Observed_Examples:
             base += CWE_Match(oe["Description"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Demonstrative_Examples_Body_For_CWE(Demonstrative_Example_Body):
     if Demonstrative_Example_Body is None:
@@ -200,7 +231,7 @@ def Scan_Demonstrative_Examples_Body_For_CWE(Demonstrative_Example_Body):
         base = []
         for de in Demonstrative_Example_Body:
             base += CWE_Match(de["Body_Text"])
-    return Flatter_Unique_Array(base)
+    return Make_CWE_Array(Flatter_Unique_Array(base))
 
 def Scan_Related_Attack_Patterns_For_CAPEC(Related_Attack_Patterns):
     if Related_Attack_Patterns is None:
@@ -208,8 +239,8 @@ def Scan_Related_Attack_Patterns_For_CAPEC(Related_Attack_Patterns):
     if isinstance(Related_Attack_Patterns, list):
         base = []
         for ra in Related_Attack_Patterns:
-            base += CWE_Match(ra["CAPEC_ID"])
-    return Flatter_Unique_Array(base)
+            base += ra["CAPEC_ID"]
+    return Make_CAPEC_Array(Flatter_Unique_Array(base))
 
 def Scan_Observed_Examples_For_CVE(Observed_Examples):
     if Observed_Examples is None:
@@ -585,7 +616,7 @@ def Parse_External_References(External_References_Section):
     return External_References
 
 
-def run():
+def Get_All_CWEs_From_Database_File():
     W = Parse_Weakness_Section(Weaknesses_Section)
     print("[+] Get {} Weaknesses".format(len(W)))
     C = Parse_Categories_Section(Categories_Section)
@@ -594,7 +625,163 @@ def run():
     print("[+] Get {} Views".format(len(V)))
     R = W + C + V
     print("[+] Complete with {} result elements".format(len(R)))
+    return R    
 
+
+class CWE(peewee.Model):
+    class Meta:
+        database = database
+        ordering = ("cwe_id")
+        table_name = "cwe"
+
+    id = peewee.PrimaryKeyField(null=False)
+    cwe_id = peewee.TextField(default="")
+    cwe_class = peewee.TextField(default="")
+    cwe_type = peewee.TextField(default="")
+    name = peewee.TextField(default="")
+    abstraction = peewee.TextField(default="")
+    structure = peewee.TextField(default="")
+    status = peewee.TextField(default="")
+    description = peewee.TextField(default="")
+    extended_description = peewee.TextField(default="")
+    related_weakness = ArrayField(peewee.TextField, default=[])
+    weakness_ordinalities = ArrayField(peewee.TextField, default=[])
+    applicable_platforms = JSONField(default={})
+    background_details = peewee.TextField(default="")
+    notes = peewee.TextField(default="")
+    related_attack_patterns = ArrayField(peewee.TextField, default=[])
+    demonstrative_examples_body = ArrayField(peewee.TextField, default=[])
+    observed_examples = ArrayField(peewee.TextField, default=[])
+    alternate_terms = ArrayField(peewee.TextField, default=[])
+    content_history_submission = ArrayField(peewee.TextField, default=[])
+    content_history_modification = ArrayField(peewee.TextField, default=[])
+    content_history_previous_entry_name = ArrayField(peewee.TextField, default=[])
+    objective = peewee.TextField(default="")
+    audience = ArrayField(peewee.TextField, default=[])
+    relationships = ArrayField(peewee.TextField, default=[])
+    references = ArrayField(peewee.TextField, default=[])
+    potential_mitigations = ArrayField(peewee.TextField, default=[])
+    cwe_list = ArrayField(peewee.TextField, default=[])
+    cve_list = ArrayField(peewee.TextField, default=[])
+    capec_list = ArrayField(peewee.TextField, default=[])
+
+    def __unicode__(self):
+            return "cwe"
+
+    def __str__(self):
+        return str(self.cwe_id)
+
+    def save(self, **kwargs):
+        with database.transaction():
+            self.related_weakness = [json.dumps(x) for x in self.related_weakness]
+            self.weakness_ordinalities = [json.dumps(x) for x in self.weakness_ordinalities]
+            self.related_attack_patterns = [json.dumps(x) for x in self.related_attack_patterns]
+            self.demonstrative_examples_body = [json.dumps(x) for x in self.demonstrative_examples_body]
+            self.observed_examples = [json.dumps(x) for x in self.observed_examples]
+            self.alternate_terms = [json.dumps(x) for x in self.alternate_terms]
+            self.content_history_submission = [json.dumps(x) for x in self.content_history_submission]
+            self.content_history_modification = [json.dumps(x) for x in self.content_history_modification]
+            self.content_history_previous_entry_name = [json.dumps(x) for x in self.content_history_previous_entry_name]
+            self.audience = [json.dumps(x) for x in self.audience]
+            self.relationships = [json.dumps(x) for x in self.relationships]
+            self.references = [json.dumps(x) for x in self.references]
+            self.potential_mitigations = [json.dumps(x) for x in self.potential_mitigations]
+            peewee.Model.save(self, **kwargs)
+
+    @property
+    def to_json(self):
+        return dict(
+            id=self.id,
+            cwe_id=self.cwe_id,
+            cwe_class=self.cwe_class,
+            cwe_type=self.cwe_type,
+            name=self.name,
+            abstraction=self.abstraction,
+            structure=self.structure,
+            status=self.status,
+            description=self.description,
+            extended_description=self.extended_description,
+            related_weakness=[json.loads(x) for x in self.related_weakness],
+            weakness_ordinalities=[json.loads(x) for x in self.weakness_ordinalities],
+            applicable_platforms=self.applicable_platforms,
+            background_details=self.background_details,
+            notes=self.notes,
+            related_attack_patterns=[json.loads(x) for x in self.related_attack_patterns],
+            demonstrative_examples_body=[json.loads(x) for x in self.demonstrative_examples_body],
+            observed_examples=[json.loads(x) for x in self.observed_examples],
+            alternate_terms=[json.loads(x) for x in self.alternate_terms],
+            content_history_submission=[json.loads(x) for x in self.content_history_submission],
+            content_history_modification=[json.loads(x) for x in self.content_history_modification],
+            content_history_previous_entry_name=[json.loads(x) for x in self.content_history_previous_entry_name],
+            objective=self.objective,
+            audience=[json.loads(x) for x in self.audience],
+            relationships=[json.loads(x) for x in self.relationships],
+            references=[json.loads(x) for x in self.references],
+            potential_mitigations=[json.loads(x) for x in self.potential_mitigations],
+            cwe_list=self.cwe_list,
+            cve_list=self.cve_list,
+            capec_list=self.capec_list
+        )
+
+def Create_Or_Update_One_CWE_Vulner_In_Postgres(One_Vulner):
+    ID = -1
+    CWE_From_PG = CWE.get_or_none(CWE.cwe_id == One_Vulner["ID"])
+    if CWE_From_PG is None:
+        New_CWE = CWE(
+            cwe_id=One_Vulner["ID"],
+            cwe_class=One_Vulner["Class"],
+            cwe_type=One_Vulner["Type"],
+            name=One_Vulner["Name"],
+            abstraction=One_Vulner["Abstraction"],
+            structure=One_Vulner["Structure"],
+            status=One_Vulner["Status"],
+            description=One_Vulner["Description"],
+            extended_description=One_Vulner["Extended_Description"],
+            related_weakness=One_Vulner["Related_Weaknesses"],
+            weakness_ordinalities=One_Vulner["Weakness_Ordinalities"],
+            applicable_platforms=One_Vulner["Applicable_Platforms"],
+            background_details=One_Vulner["Background_Details"],
+            notes=One_Vulner["Notes"],
+            related_attack_patterns=One_Vulner["Related_Attack_Patterns"],
+            demonstrative_examples_body=One_Vulner["Demonstrative_Examples_Body"],
+            observed_examples=One_Vulner["Observed_Examples"],
+            alternate_terms=One_Vulner["Alternate_Terms"],
+            content_history_submission=One_Vulner["Content_History_Submission"],
+            content_history_modification=One_Vulner["Content_History_Modification"],
+            content_history_previous_entry_name=One_Vulner["Content_History_Previous_Entry_Name"],
+            objective=One_Vulner["Objective"],
+            audience=One_Vulner["Audience"],
+            relationships=One_Vulner["Relationships"],
+            references=One_Vulner["References"],
+            potential_mitigations=One_Vulner["Potential_Mitigations"],
+            cwe_list=One_Vulner["CWE_List"],
+            cve_list=One_Vulner["CVE_List"],
+            capec_list=One_Vulner["CAPEC_List"]
+        )
+        New_CWE.save()
+    return ID
+
+def Pretty_Print_Json(Json_To_Print):
+    Json_Keys = Json_To_Print.keys()
+    for One_Key in Json_Keys:
+        print("{}: {}\n".format(One_Key, Json_To_Print[One_Key]))
+
+def run():
+    if database.is_closed:
+        database.connect()
+    CWE.drop_table()
+    CWE.create_table()
+
+    CWE_Vulnerabilities = Get_All_CWEs_From_Database_File()
+
+    CWE_Vulnerabilities_IDs = list(
+        map(Create_Or_Update_One_CWE_Vulner_In_Postgres, CWE_Vulnerabilities)
+    )
+
+    print("Create {} records in pistgres".format(len(CWE_Vulnerabilities_IDs)))
+
+    if not database.is_closed:
+        database.close()
 
 def main():
     run()
